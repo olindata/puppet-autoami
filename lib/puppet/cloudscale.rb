@@ -79,11 +79,12 @@ module Puppet::CloudPack
 
     def current_instances
       nodes = Hash.new
-      dbh.query('SELECT * FROM nodes').each_hash do |node|
+      dbh.query('SELECT nodes.*, groups.region FROM nodes JOIN groups ON nodes.ami_group=groups.name').each_hash do |node|
         dns_name  = node['dns_name']
         ami_group = node['ami_group']
+	region = node['region']
 
-        unless instance = Puppet::Face[:node_aws, :current].list.find { |id,values| values['dns_name'] == dns_name }
+        unless instance = Puppet::Face[:node_aws, :current].list(:region => region).find { |id,values| values['dns_name'] == dns_name }
 
           Puppet.warning "Instance #{dns_name} no longer exists but never reported.  Removing from list. You might want to run autoami again"
           dbh.query("DELETE FROM nodes WHERE dns_name='#{dns_name}'")
@@ -148,7 +149,8 @@ module Puppet::CloudPack
         :keyname => props[:keyname],
         :image   => props[:image],
         :type    => props[:type],
-        :tags    => 'Created-By-Tool=Autoami'
+        :instance_tags  => 'Created-By-Tool=Autoami',
+	:security_group => props[:node_group]
 
       dbh.query("INSERT INTO nodes ( dns_name, ami_group ) VALUES ( '#{server}', '#{group}')")
 
@@ -156,7 +158,7 @@ module Puppet::CloudPack
         :keyfile => props[:keyfile],
         :server  => props[:server],
         :login   => props[:login],
-        :install_script => 'autoami',
+        # :install_script => 'autoami',
         :enc_auth_user => props[:enc_user],
         :enc_auth_passwd => props[:enc_pass],
         :enc_port      => props[:enc_port],
