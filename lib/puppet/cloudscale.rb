@@ -1,3 +1,4 @@
+# TODO: add --security-group parameter
 module Puppet::CloudPack
   class << self
 
@@ -136,7 +137,7 @@ module Puppet::CloudPack
       end
 
       groups_hash.each do |agroup,props|
-        launch_instance agroup, props
+        server = launch_instance agroup, props
 
         Puppet.info 'Running puppet agent'
         command_prefix = props[:login] == 'root' ? '' : 'sudo '
@@ -150,23 +151,23 @@ module Puppet::CloudPack
         :image   => props[:image],
         :type    => props[:type],
         :instance_tags  => 'Created-By-Tool=Autoami',
-	:security_group => props[:node_group]
+        :security_group => props[:node_group]
 
       dbh.query("INSERT INTO nodes ( dns_name, ami_group ) VALUES ( '#{server}', '#{group}')")
 
-      Puppet::Face[:node, :current].init(server, {
+      Puppet::Face[:node_aws, :current].init(server, {
         :keyfile => props[:keyfile],
         :server  => props[:server],
         :login   => props[:login],
         # :install_script => 'autoami',
-        :enc_auth_user => props[:enc_user],
-        :enc_auth_passwd => props[:enc_pass],
-        :enc_port      => props[:enc_port],
-        :enc_server    => props[:enc_server],
-        :enc_ssl       => true,
+        # :enc_auth_user => props[:enc_user],
+        # :enc_auth_passwd => props[:enc_pass],
+        # :enc_port      => props[:enc_port],
+        # :enc_server    => props[:enc_server],
+        # :enc_ssl       => true,
         :puppetagent_certname => server,
-        :node_group => props[:node_group] }
-      )
+        # :node_group => props[:node_group]
+      })
 
       server
     end
