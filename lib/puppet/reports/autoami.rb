@@ -1,3 +1,4 @@
+# TODO: make --region configurable
 require 'puppet'
 require 'puppet/face'
 require 'uri'
@@ -40,6 +41,7 @@ Puppet::Reports.register_report(:autoami) do
       if changed > 0 and failed == 0
         #Generate the new AMI
         new_image = node.new_ami self.host,
+          :region => 'ap-southeast-1',
           :manifest_version => self.configuration_version,
           :description => "#{ami_group} Manifest version #{self.configuration_version}"
 
@@ -49,7 +51,8 @@ Puppet::Reports.register_report(:autoami) do
 
         #Wait until we have our image built
         loop {
-          images = Puppet::Face[:node_aws, :current].images
+          images = Puppet::Face[:node_aws, :current].images :region => 'ap-southeast-1'
+
           if images.keys.include?(new_image) and images[new_image]['state'] == 'available'
             dbh.query("UPDATE groups SET image='#{new_image}' WHERE name='#{ami_group}'")
             break
@@ -60,7 +63,7 @@ Puppet::Reports.register_report(:autoami) do
 
       #Delete the host
       dbh.query("DELETE FROM nodes WHERE dns_name='#{self.host}'")
-      Puppet::Face[:node_aws, :current].terminate self.host
+      Puppet::Face[:node_aws, :current].terminate self.host, :region => 'ap-southeast-1'
     end
   end
 end

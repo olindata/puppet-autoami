@@ -1,4 +1,7 @@
 # TODO: add --security-group parameter
+# TODO: add --puppet-version parameter
+# TODO: add --install-script parameter
+# TODO: add --ec2-userdata and -ec2-userdata-file parameters
 module Puppet::CloudPack
   class << self
 
@@ -159,6 +162,7 @@ module Puppet::CloudPack
         :keyfile => props[:keyfile],
         :server  => props[:server],
         :login   => props[:login],
+	:puppet_version => '3.1.1',
         # :install_script => 'autoami',
         # :enc_auth_user => props[:enc_user],
         # :enc_auth_passwd => props[:enc_pass],

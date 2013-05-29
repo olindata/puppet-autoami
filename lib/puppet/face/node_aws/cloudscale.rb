@@ -9,6 +9,7 @@ Puppet::Face.define :node_aws, '0.0.1' do
     EOT
 
     Puppet::CloudPack.add_platform_option(self)
+    Puppet::CloudPack.add_region_option(self)
     when_invoked do |options|
       Puppet::CloudPack.images(options)
     end
