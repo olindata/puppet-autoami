@@ -1,4 +1,3 @@
-# TODO: make --region configurable
 require 'puppet'
 require 'puppet/face'
 require 'uri'
@@ -20,12 +19,15 @@ Puppet::Reports.register_report(:autoami) do
       raise "Could not connect to database: #{e}"
     end
 
-    found = false
+    found     = false
     ami_group = String.new
-    dbh.query("SELECT dns_name,ami_group FROM nodes").each_hash do |node|
+    region    = String.new
+
+    dbh.query("SELECT dns_name, ami_group, region FROM nodes JOIN groups ON nodes.ami_group=groups.name").each_hash do |node|
       #This is much more efficient
       if node['dns_name'] == self.host
         ami_group = node['ami_group']
+        region = node['region']
         found = true
         break
       end
@@ -33,15 +35,14 @@ Puppet::Reports.register_report(:autoami) do
 
     #If the reporting node matches any of our groups
     if found
-      node = Puppet::Face[:node_aws, :current]
-
+      node    = Puppet::Face[:node_aws, :current]
       changed = metrics['resources']['changed']
       failed  = metrics['resources']['failed']
 
       if changed > 0 and failed == 0
         #Generate the new AMI
         new_image = node.new_ami self.host,
-          :region => 'ap-southeast-1',
+          :region => region,
           :manifest_version => self.configuration_version,
           :description => "#{ami_group} Manifest version #{self.configuration_version}"
 
@@ -51,7 +52,7 @@ Puppet::Reports.register_report(:autoami) do
 
         #Wait until we have our image built
         loop {
-          images = Puppet::Face[:node_aws, :current].images :region => 'ap-southeast-1'
+          images = Puppet::Face[:node_aws, :current].images :region => region
 
           if images.keys.include?(new_image) and images[new_image]['state'] == 'available'
             dbh.query("UPDATE groups SET image='#{new_image}' WHERE name='#{ami_group}'")
@@ -63,7 +64,7 @@ Puppet::Reports.register_report(:autoami) do
 
       #Delete the host
       dbh.query("DELETE FROM nodes WHERE dns_name='#{self.host}'")
-      Puppet::Face[:node_aws, :current].terminate self.host, :region => 'ap-southeast-1'
+      Puppet::Face[:node_aws, :current].terminate self.host, :region => region
     end
   end
 end

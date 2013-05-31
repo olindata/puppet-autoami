@@ -34,8 +34,8 @@ Puppet::Face.define :autoami, '0.0.1' do
   action :list do
     summary 'List active instances'
 
-    when_invoked do
-      Puppet::CloudPack.current_instances
+    when_invoked do |options|
+      Puppet::CloudPack.current_instances options
     end
 
     when_rendering :console do |result|

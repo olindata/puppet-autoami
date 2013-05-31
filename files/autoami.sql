@@ -31,6 +31,8 @@ CREATE TABLE `groups` (
   `enc_pass` varchar(255) NOT NULL,
   `enc_port` varchar(255) NOT NULL,
   `node_group` varchar(255) NOT NULL,
-  `region` varchar(255) NOT NULL
+  `region` varchar(255) NOT NULL,
+  `security_group` varchar(255) NOT NULL,
+  `puppet_version` varchar(255) NOT NULL
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;

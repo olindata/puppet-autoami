@@ -1,7 +1,5 @@
-# TODO: add --security-group parameter
-# TODO: add --puppet-version parameter
 # TODO: add --install-script parameter
-# TODO: add --ec2-userdata and -ec2-userdata-file parameters
+# TODO: add --userdata parameter
 module Puppet::CloudPack
   class << self
 
@@ -70,23 +68,40 @@ module Puppet::CloudPack
         summary 'Puppet master server'
       end
 
-      action.option '--region=' do
-        summary 'EC2 region to launch the instances in'
+      #action.option '--region=' do
+        #summary 'EC2 region to launch the instances in'
 
-        default_to { 'us-east-1' }
-      end
+        #default_to { 'us-east-1' }
+      #end
 
       action.option '--node-group=' do
         summary 'Console node group to add the instance to'
       end
+
+      action.option '--puppet-version=' do
+        summary 'Version of Puppet to install.'
+        description <<-EOT
+          Version of Puppet to be installed. This version is
+          passed to the Puppet installer script.
+        EOT
+        before_action do |action, arguments, options|
+          unless options[:puppet_version] =~ /^(\d+)\.(\d+)(\.(\d+|x))?$|^(\d)+\.(\d)+\.(\d+)([a-zA-Z][a-zA-Z0-9-]*)|master$/
+            raise ArgumentError, "Invaid Puppet version '#{options[:puppet_version]}'"
+          end
+        end
+      end
+
+      self.add_platform_option(action)
+      self.add_region_option(action)
+      self.add_group_option(action)
     end
 
-    def current_instances
+    def current_instances(options)
       nodes = Hash.new
-      dbh.query('SELECT nodes.*, groups.region FROM nodes JOIN groups ON nodes.ami_group=groups.name').each_hash do |node|
+      region = options[:region]
+      dbh.query("SELECT nodes.* FROM nodes JOIN groups ON nodes.ami_group=groups.name WHERE groups.region='#{region}'").each_hash do |node|
         dns_name  = node['dns_name']
         ami_group = node['ami_group']
-	region = node['region']
 
         unless instance = Puppet::Face[:node_aws, :current].list(:region => region).find { |id,values| values['dns_name'] == dns_name }
 
@@ -104,18 +119,21 @@ module Puppet::CloudPack
     def get_props(group)
       group_props = Hash.new
       dbh.query("SELECT * FROM groups WHERE name='#{group}'").each_hash do |group|
-        group_props = { :image   => group['image'],
-                        :type    => group['type'],
-                        :keyname => group['keyname'],
-                        :keyfile => group['keyfile'],
-                        :login   => group['login'],
-                        :server  => group['server'],
-                        :node_group => group['node_group'],
-                        :enc_server => group['enc_server'],
-                        :enc_user   => group['enc_user'],
-                        :enc_pass   => group['enc_pass'],
-                        :enc_port   => group['enc_port'],
-                        :region  => group['region']
+        group_props = {
+          :image          => group['image'],
+          :type           => group['type'],
+          :keyname        => group['keyname'],
+          :keyfile        => group['keyfile'],
+          :login          => group['login'],
+          :server         => group['server'],
+          :node_group     => group['node_group'],
+          :enc_server     => group['enc_server'],
+          :enc_user       => group['enc_user'],
+          :enc_pass       => group['enc_pass'],
+          :enc_port       => group['enc_port'],
+          :region         => group['region'],
+          :security_group => group['security_group'],
+          :puppet_version => group['puppet_version']
         }
       end
       group_props
@@ -124,18 +142,21 @@ module Puppet::CloudPack
     def load_ami_groups
       groups_hash = Hash.new
       dbh.query('SELECT * FROM groups').each_hash do |group|
-        groups_hash[group['name']] = { :image   => group['image'],
-                               :type    => group['type'],
-                               :keyname => group['keyname'],
-                               :keyfile => group['keyfile'],
-                               :login   => group['login'],
-                               :server  => group['server'],
-                               :node_group => group['node_group'],
-                               :enc_server => group['enc_server'],
-                               :enc_user   => group['enc_user'],
-                               :enc_pass   => group['enc_pass'],
-                               :enc_port   => group['enc_port'],
-                               :region  => group['region']
+        groups_hash[group['name']] = {
+          :image          => group['image'],
+          :type           => group['type'],
+          :keyname        => group['keyname'],
+          :keyfile        => group['keyfile'],
+          :login          => group['login'],
+          :server         => group['server'],
+          :node_group     => group['node_group'],
+          :enc_server     => group['enc_server'],
+          :enc_user       => group['enc_user'],
+          :enc_pass       => group['enc_pass'],
+          :enc_port       => group['enc_port'],
+          :region         => group['region'],
+          :security_group => group['security_group'],
+          :puppet_version => group['puppet_version']
         }
       end
 
@@ -150,19 +171,19 @@ module Puppet::CloudPack
 
     def launch_instance(group, props)
       server = Puppet::Face[:node_aws, :current].create :region => props[:region],
-        :keyname => props[:keyname],
-        :image   => props[:image],
-        :type    => props[:type],
-        :instance_tags  => 'Created-By-Tool=Autoami',
-        :security_group => props[:node_group]
+        :keyname        => props[:keyname],
+        :image          => props[:image],
+        :type           => props[:type],
+        :security_group => props[:security_group],
+        :instance_tags  => 'Created-By-Tool=Autoami'
 
       dbh.query("INSERT INTO nodes ( dns_name, ami_group ) VALUES ( '#{server}', '#{group}')")
 
       Puppet::Face[:node_aws, :current].init(server, {
-        :keyfile => props[:keyfile],
-        :server  => props[:server],
-        :login   => props[:login],
-	:puppet_version => '3.1.1',
+        :keyfile        => props[:keyfile],
+        :server         => props[:server],
+        :login          => props[:login],
+        :puppet_version => props[:puppet_version],
         # :install_script => 'autoami',
         # :enc_auth_user => props[:enc_user],
         # :enc_auth_passwd => props[:enc_pass],
@@ -186,6 +207,8 @@ module Puppet::CloudPack
                                :login   => group['login'],
                                :server  => group['server'],
                                :region  => group['region'],
+                               :security_group => group['security_group'],
+                               :puppet_version => group['puppet_version'],
                                :enc_server => group['enc_server'],
                                :enc_user   => group['enc_user'],
                                :enc_pass   => group['enc_pass'],
@@ -203,7 +226,7 @@ module Puppet::CloudPack
     def new_group(group, options)
       enc_server = options[:enc_server] || options[:puppetserver]
 
-      dbh.query("INSERT INTO groups ( name, image, type, keyname, keyfile, login, server, region, node_group, enc_server, enc_port, enc_user, enc_pass) VALUES ( '#{group}', '#{options[:image]}', '#{options[:type]}', '#{options[:keyname]}', '#{options[:keyfile]}', '#{options[:login]}', '#{options[:puppetserver]}', '#{options[:region]}', '#{options[:node_group]}', '#{enc_server}', '#{options[:enc_port]}', '#{options[:enc_user]}', '#{options[:enc_pass]}')")
+      dbh.query("INSERT INTO groups ( name, image, type, keyname, keyfile, login, server, region, security_group, puppet_version, node_group, enc_server, enc_port, enc_user, enc_pass) VALUES ( '#{group}', '#{options[:image]}', '#{options[:type]}', '#{options[:keyname]}', '#{options[:keyfile]}', '#{options[:login]}', '#{options[:puppetserver]}', '#{options[:region]}', '#{options[:security_group]}', '#{options[:puppet_version]}', '#{options[:node_group]}', '#{enc_server}', '#{options[:enc_port]}', '#{options[:enc_user]}', '#{options[:enc_pass]}')")
     end
 
     def add_new_ami_options(action)
